@@ -40,7 +40,7 @@ def check_tokens():
 
 
 def send_message(bot, message):
-    """Отправка сообщения в чат"""
+    """Отправка сообщения в чат."""
     try:
         bot.send_message(chat_id=TELEGRAM_CHAT_ID, text=message)
         logger.debug(f'Отправлено сообщение: {message}')
