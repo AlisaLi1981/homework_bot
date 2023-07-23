@@ -101,7 +101,6 @@ def main():
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
-    #timestamp = 0
     last_message = None
 
     while True:
