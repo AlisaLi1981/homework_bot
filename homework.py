@@ -25,13 +25,6 @@ HOMEWORK_VERDICTS = {
 }
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler(stream=sys.stdout)
-logger.addHandler(handler)
-formatter = logging.Formatter(
-    '{asctime}, {levelname}, {name}, {message}', style='{'
-)
-handler.setFormatter(formatter)
 
 
 def check_tokens():
@@ -61,7 +54,6 @@ def get_api_answer(timestamp):
         error_message = (
             f'Не удалось выполнить успешный запрос.'
             f'Код ответа: {response.status_code}')
-        logger.error(error_message)
         raise requests.RequestException(error_message)
     return response.json()
 
@@ -70,36 +62,30 @@ def check_response(response):
     """Проверка ответа API."""
     if not isinstance(response, dict):
         raise TypeError('Ожидается ответ в формате dict')
-    if 'homeworks' not in response or 'current_date' not in response:
-        error_message = ('Ответ не содержит обязательный(е) ключ(и)')
-        logger.error(error_message)
-        raise KeyError(error_message)
+    expected_keys = ('homeworks', 'current_date')
+    for key in expected_keys:
+        if key not in response:
+            error_message = (f'Ответ не содержит обязательный ключ {key}')
+            raise KeyError(error_message)
     homeworks = response.get('homeworks')
     if not isinstance(homeworks, list):
         raise TypeError('Ожидается ответ в формате list')
-    if len(homeworks) == 0:
-        logging.error('Получен пустой список работ')
-        raise IndexError('Получен пустой список работ')
-    return homeworks[0]
+    return homeworks
 
 
 def parse_status(homework):
     """Получение данных из ответа API."""
-    if 'homework_name' not in homework:
-        error_message = ('Не был получен ключ {homework_name}')
-        logger.error(error_message)
-        raise KeyError(error_message)
+    expected_keys = ('homework_name', 'status')
+    for key in expected_keys:
+        if key not in homework:
+            error_message = (f'Не был получен ключ {key}')
+            raise KeyError(error_message)
     homework_name = homework.get('homework_name')
-    if 'status' not in homework:
-        error_message = ('Не был получен ключ {homework_status}')
-        logger.error(error_message)
-        raise KeyError(error_message)
     homework_status = homework.get('status')
     if homework_status not in HOMEWORK_VERDICTS:
         error_message = (
             f'Получен неожиданный статус работы: {homework_status}'
         )
-        logger.error(error_message)
         raise KeyError(error_message)
     verdict = HOMEWORK_VERDICTS[homework_status]
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
@@ -115,22 +101,26 @@ def main():
 
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
+    #timestamp = 0
     last_message = None
 
     while True:
         try:
             response = get_api_answer(timestamp)
-            homework = check_response(response)
-            if homework:
-                new_message = parse_status(homework)
-                if new_message == last_message:
-                    logger.debug(
-                        'Статус не изменился. '
-                        'Повторный запрос через 10 минут.'
-                    )
-                else:
-                    last_message != new_message
-                    send_message(bot, new_message)
+            homeworks = check_response(response)
+            if not homeworks:
+                logger.info('Нет проектов в запрошенный период.')
+                continue
+            first_element, *other = homeworks
+            new_message = parse_status(first_element)
+            if new_message == last_message:
+                logger.debug(
+                    'Статус не изменился. '
+                    'Повторный запрос через 10 минут.'
+                )
+            else:
+                last_message != new_message
+                send_message(bot, new_message)
 
         except Exception as error:
             error_message = f'Сбой в работе программы: {error}'
@@ -142,4 +132,12 @@ def main():
 
 
 if __name__ == '__main__':
+    logger.setLevel(logging.DEBUG)
+    handler = logging.StreamHandler(stream=sys.stdout)
+    logger.addHandler(handler)
+    formatter = logging.Formatter(
+        '{asctime}, {levelname}, {name}, {message}', style='{'
+    )
+    handler.setFormatter(formatter)
+
     main()
